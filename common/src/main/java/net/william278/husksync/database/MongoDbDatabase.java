@@ -37,12 +37,15 @@ import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.logging.Level;
 
 public class MongoDbDatabase extends Database {
+
     private MongoConnectionHandler mongoConnectionHandler;
     private MongoCollectionHelper mongoCollectionHelper;
 
@@ -63,11 +66,10 @@ public class MongoDbDatabase extends Database {
     public void initialize() throws IllegalStateException {
         final Settings.DatabaseSettings.DatabaseCredentials credentials = plugin.getSettings().getDatabase().getCredentials();
         try {
-            ConnectionString URI = createConnectionURI(credentials);
+            ConnectionString URI = new ConnectionString(buildURI(credentials));
             mongoConnectionHandler = new MongoConnectionHandler(URI, credentials.getDatabase());
             mongoCollectionHelper = new MongoCollectionHelper(mongoConnectionHandler);
 
-            // Check config for if tables should be created
             if (!plugin.getSettings().getDatabase().isCreateTables()) return;
 
             if (mongoCollectionHelper.getCollection(usersTable) == null) {
@@ -88,17 +90,46 @@ public class MongoDbDatabase extends Database {
         }
     }
 
-    @NotNull
-    private ConnectionString createConnectionURI(Settings.DatabaseSettings.DatabaseCredentials credentials) {
-        String baseURI = plugin.getSettings().getDatabase().getMongoSettings().isUsingAtlas() ?
-                "mongodb+srv://{0}:{1}@{2}/{4}{5}" : "mongodb://{0}:{1}@{2}:{3}/{4}{5}";
-        baseURI = baseURI.replace("{0}", credentials.getUsername());
-        baseURI = baseURI.replace("{1}", credentials.getPassword());
-        baseURI = baseURI.replace("{2}", credentials.getHost());
-        baseURI = baseURI.replace("{3}", String.valueOf(credentials.getPort()));
-        baseURI = baseURI.replace("{4}", credentials.getDatabase());
-        baseURI = baseURI.replace("{5}", plugin.getSettings().getDatabase().getMongoSettings().getParameters());
-        return new ConnectionString(baseURI);
+    private String buildURI(@NotNull Settings.DatabaseSettings.DatabaseCredentials credentials) {
+        String manualUri = credentials.getUri();
+        if (manualUri != null && !manualUri.isBlank()) {
+            return manualUri;
+        }
+
+        boolean isLocal = "localhost".equals(credentials.getHost()) || "127.0.0.1".equals(credentials.getHost());
+
+        if (isLocal) {
+            return String.format("mongodb://%s:%s/%s%s",
+                    credentials.getHost(),
+                    credentials.getPort(),
+                    credentials.getDatabase(),
+                    plugin.getSettings().getDatabase().getMongoSettings().getParameters()
+            );
+        }
+
+        String encodedUsername = URLEncoder.encode(credentials.getUsername(), StandardCharsets.UTF_8);
+        String encodedPassword = URLEncoder.encode(credentials.getPassword(), StandardCharsets.UTF_8);
+
+        return buildRemoteURI(credentials, encodedUsername, encodedPassword);
+    }
+
+    private @NotNull String buildRemoteURI(@NotNull Settings.DatabaseSettings.DatabaseCredentials credentials, @NotNull String encodedUsername, @NotNull String encodedPassword) {
+        String databaseName = credentials.getDatabase().split("\\?")[0];
+
+        String baseURI = plugin.getSettings().getDatabase().getMongoSettings().isUsingAtlas()
+                ? "mongodb+srv://%s:%s@%s/%s%s"
+                : "mongodb://%s:%s@%s:%s/%s%s";
+
+        return String.format(
+                baseURI,
+                encodedUsername,
+                encodedPassword,
+                credentials.getHost(),
+                plugin.getSettings().getDatabase().getMongoSettings().isUsingAtlas() ? databaseName :
+                        credentials.getPort(),
+                databaseName,
+                plugin.getSettings().getDatabase().getMongoSettings().getParameters()
+        );
     }
 
     @Blocking

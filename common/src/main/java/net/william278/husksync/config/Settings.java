@@ -90,7 +90,7 @@ public class Settings {
     public static class DatabaseSettings {
 
         @Comment("Type of database to use (MYSQL, MARIADB, POSTGRES, MONGO)")
-        private Database.Type type = Database.Type.MYSQL;
+        private Database.Type type = Database.Type.MONGO;
 
         @Comment("Specify credentials here for your MYSQL, MARIADB, POSTGRES OR MONGO database")
         private DatabaseCredentials credentials = new DatabaseCredentials();
@@ -99,11 +99,15 @@ public class Settings {
         @Configuration
         @NoArgsConstructor(access = AccessLevel.PRIVATE)
         public static class DatabaseCredentials {
+            @Comment("MongoDB 직접 연결 URI. 설정 시 다른 모든 설정을 무시하고 이 값을 사용합니다.")
+            private String uri = "";
+
             private String host = "localhost";
-            private int port = 3306;
-            private String database = "HuskSync";
+            private int port = 27017;
+            private String database = "squable";
             private String username = "root";
             private String password = "pa55w0rd";
+
             @Comment("Only change this if you're using MARIADB or POSTGRES")
             private String parameters = String.join("&",
                     "?autoReconnect=true", "useSSL=false",
@@ -131,10 +135,11 @@ public class Settings {
         @Configuration
         @NoArgsConstructor(access = AccessLevel.PRIVATE)
         public static class MongoSettings {
+            @Comment("MongoDB Atlas를 사용할지 여부")
             private boolean usingAtlas = false;
-            private String parameters = String.join("&",
-                    "?retryWrites=true", "w=majority",
-                    "authSource=HuskSync");
+
+            @Comment("추가 MongoDB 접속 파라미터")
+            private String parameters = "retryWrites=true&w=majority";
         }
 
         @Comment("Names of tables to use on your database. Don't modify this unless you know what you're doing!")

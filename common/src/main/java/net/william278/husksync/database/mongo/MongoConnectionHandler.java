@@ -30,6 +30,7 @@ import org.jetbrains.annotations.NotNull;
 
 @Getter
 public class MongoConnectionHandler {
+
     private final MongoClient mongoClient;
     private final MongoDatabase database;
 
